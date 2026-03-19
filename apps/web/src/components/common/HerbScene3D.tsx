@@ -8,7 +8,7 @@ export default function HerbScene3D() {
         if (!mountRef.current) return;
 
         let animationId: number;
-        let THREE: typeof import("three");
+        let THREE: any //import("three");
 
         const init = async () => {
             THREE = await import("three");
@@ -102,7 +102,7 @@ export default function HerbScene3D() {
                 };
 
                 scene.add(group);
-                objects.push(group as unknown as THREE.Mesh);
+                objects.push(group as any);
             }
 
             // 2. Herb leaves (flattened ellipsoids)
@@ -149,7 +149,7 @@ export default function HerbScene3D() {
                 };
 
                 scene.add(group);
-                objects.push(group as unknown as THREE.Mesh);
+                objects.push(group as any);
             }
 
             // 3. Mortar & pestle (sphere + cylinder)
@@ -179,7 +179,7 @@ export default function HerbScene3D() {
                 baseY: 0.5,
             };
             scene.add(mortarGroup);
-            objects.push(mortarGroup as unknown as THREE.Mesh);
+            objects.push(mortarGroup as any);
 
             // 4. Small floating spheres (seeds/berries)
             for (let i = 0; i < 12; i++) {
@@ -228,7 +228,7 @@ export default function HerbScene3D() {
                 baseY: -0.5,
             };
             scene.add(vialGroup);
-            objects.push(vialGroup as unknown as THREE.Mesh);
+            objects.push(vialGroup as any);
 
             // ── Animation Loop ────────────────────────────────────────────────────
             const clock = new THREE.Clock();
