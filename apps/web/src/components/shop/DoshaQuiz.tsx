@@ -1,0 +1,1 @@
+export default function DoshaQuiz() { return null; }
