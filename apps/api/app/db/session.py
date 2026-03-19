@@ -1,25 +1,25 @@
-"""
-Async SQLAlchemy engine and session factory.
-"""
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-
 from app.core.config import settings
+import ssl
 
-# NullPool is recommended for serverless/edge environments (Neon, Supabase)
-# Use QueuePool for long-running servers (Render, Railway)
+# Build connect_args for SSL (required for Neon, Supabase etc.)
+connect_args = {}
+if "neon.tech" in settings.DATABASE_URL or "supabase" in settings.DATABASE_URL:
+    ssl_context = ssl.create_default_context()
+    connect_args["ssl"] = ssl_context
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    # pool_class=NullPool,   # uncomment for serverless
+    pool_size=5,
+    max_overflow=10,
+    connect_args=connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
-    expire_on_commit=False,  # prevent lazy-load errors after commit
+    expire_on_commit=False,
     autocommit=False,
     autoflush=False,
 )
