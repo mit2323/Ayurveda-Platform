@@ -42,7 +42,7 @@ export default function HerbScene3D() {
             scene.add(fillLight);
 
             // ── Objects ──────────────────────────────────────────────────────────
-            const objects: THREE.Mesh[] = [];
+            const objects: any[] = [];
 
             // Color palette
             const colors = [
