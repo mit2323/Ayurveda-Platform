@@ -163,7 +163,7 @@ function ImageUploadZone({
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
-export default function AddProductPage() {
+export default function page() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const STEPS = ["Basic Info", "Pricing & Stock", "Ayurvedic Details", "Images", "Review"];
