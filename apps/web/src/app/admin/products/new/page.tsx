@@ -57,6 +57,22 @@ function StepBar({ current, steps }: { current: number; steps: string[] }) {
   );
 }
 
+// ── Field helper — defined OUTSIDE AddProductPage so React never remounts it ───
+function Field({ label, required, error, children, hint }: {
+  label: string; required?: boolean; error?: string; children: React.ReactNode; hint?: string;
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-1.5">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-[var(--text-muted)] mt-1">{hint}</p>}
+      {error && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={11} />{error}</p>}
+    </div>
+  );
+}
+
 // ── Image Upload Zone ──────────────────────────────────────────────────────────
 function ImageUploadZone({
   images, onAdd, onRemove, onSetPrimary
@@ -78,7 +94,6 @@ function ImageUploadZone({
 
   return (
     <div className="space-y-4">
-      {/* Drop zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -112,23 +127,18 @@ function ImageUploadZone({
         />
       </div>
 
-      {/* Image previews */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {images.map((img, i) => (
             <div key={i} className="relative group rounded border overflow-hidden"
               style={{ borderColor: img.isPrimary ? "var(--sage-500)" : "var(--border-light)" }}>
               <img src={img.preview} alt="" className="w-full aspect-square object-cover" />
-
-              {/* Primary badge */}
               {img.isPrimary && (
                 <div className="absolute top-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-sm"
                   style={{ background: "var(--sage-600)", color: "#fff" }}>
                   Primary
                 </div>
               )}
-
-              {/* Actions overlay */}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                 {!img.isPrimary && (
                   <button
@@ -162,161 +172,9 @@ function ImageUploadZone({
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────────
-export default function page() {
-  const router = useRouter();
-  const [step, setStep] = useState(0);
-  const STEPS = ["Basic Info", "Pricing & Stock", "Ayurvedic Details", "Images", "Review"];
-
-  // Form state
-  const [form, setForm] = useState({
-    name: "", sku: "", category_id: "", dosha_type: "none",
-    price: "", sale_price: "", stock: "0", low_stock_threshold: "10",
-    weight_grams: "", short_description: "", description: "",
-    usage_instructions: "", meta_title: "", meta_description: "",
-    is_active: true, is_featured: false,
-  });
-  const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: "", quantity: "" }]);
-  const [benefits, setBenefits] = useState<string[]>([""]);
-  const [certifications, setCertifications] = useState<string[]>([]);
-  const [images, setImages] = useState<ProductImage[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
-
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
-
-  // Fetch categories
-  const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      try {
-        const res = await apiClient.get("/products/categories");
-        return res.data;
-      } catch { return []; }
-    },
-  });
-
-  // Handle image additions
-  const handleAddImages = (files: File[]) => {
-    const newImages = files.map((file, i) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      isPrimary: images.length === 0 && i === 0,
-    }));
-    setImages(prev => [...prev, ...newImages]);
-  };
-
-  const handleRemoveImage = (index: number) => {
-    setImages(prev => {
-      const next = prev.filter((_, i) => i !== index);
-      if (prev[index].isPrimary && next.length > 0) {
-        next[0].isPrimary = true;
-      }
-      return next;
-    });
-  };
-
-  const handleSetPrimary = (index: number) => {
-    setImages(prev => prev.map((img, i) => ({ ...img, isPrimary: i === index })));
-  };
-
-  // Validation per step
-  const validateStep = (s: number): string | null => {
-    if (s === 0) {
-      if (!form.name.trim()) return "Product name is required";
-      if (!form.sku.trim()) return "SKU is required";
-      if (!form.short_description.trim()) return "Short description is required";
-    }
-    if (s === 1) {
-      if (!form.price || parseFloat(form.price) <= 0) return "Valid price is required";
-      if (form.sale_price && parseFloat(form.sale_price) >= parseFloat(form.price))
-        return "Sale price must be less than regular price";
-      if (parseInt(form.stock) < 0) return "Stock cannot be negative";
-    }
-    if (s === 3) {
-      if (images.length === 0) return "Please add at least one product image";
-    }
-    return null;
-  };
-
-  const handleNext = () => {
-    const err = validateStep(step);
-    if (err) { toast.error(err); return; }
-    setStep(s => Math.min(s + 1, STEPS.length - 1));
-    window.scrollTo(0, 0);
-  };
-
-  // Submit
-  const createProduct = useMutation({
-    mutationFn: async () => {
-      setUploading(true);
-      // 1. Create product
-      const payload: any = {
-        name: form.name,
-        sku: form.sku.toUpperCase(),
-        price: parseFloat(form.price),
-        stock: parseInt(form.stock),
-        low_stock_threshold: parseInt(form.low_stock_threshold),
-        dosha_type: form.dosha_type,
-        is_active: form.is_active,
-        is_featured: form.is_featured,
-        short_description: form.short_description || null,
-        description: form.description || null,
-        usage_instructions: form.usage_instructions || null,
-        meta_title: form.meta_title || null,
-        meta_description: form.meta_description || null,
-      };
-      if (form.sale_price) payload.sale_price = parseFloat(form.sale_price);
-      if (form.weight_grams) payload.weight_grams = parseInt(form.weight_grams);
-      if (form.category_id) payload.category_id = parseInt(form.category_id);
-      const validIngredients = ingredients.filter(i => i.name.trim());
-      if (validIngredients.length > 0) payload.ingredients = validIngredients;
-      const validBenefits = benefits.filter(b => b.trim());
-      if (validBenefits.length > 0) payload.benefits = validBenefits;
-      if (certifications.length > 0) payload.certifications = certifications;
-
-      const productRes = await apiClient.post("/products", payload);
-      const productId = productRes.data.id;
-
-      // 2. Upload images
-      for (let i = 0; i < images.length; i++) {
-        const formData = new FormData();
-        formData.append("file", images[i].file);
-        await apiClient.post(
-          `/products/${productId}/images?is_primary=${images[i].isPrimary}`,
-          formData,
-          { headers: { "Content-Type": "multipart/form-data" } }
-        );
-      }
-      return productRes.data;
-    },
-    onSuccess: (data) => {
-      toast.success("Product created successfully!");
-      router.push("/admin/products");
-    },
-    onError: (err: any) => {
-      const detail = err.response?.data?.detail;
-      toast.error(typeof detail === "string" ? detail : "Failed to create product");
-    },
-    onSettled: () => setUploading(false),
-  });
-
-  // ── Field helpers ─────────────────────────────────────────────────────────
-  const Field = ({ label, required, error, children, hint }: {
-    label: string; required?: boolean; error?: string; children: React.ReactNode; hint?: string;
-  }) => (
-    <div>
-      <label className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-1.5">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      {children}
-      {hint && <p className="text-xs text-[var(--text-muted)] mt-1">{hint}</p>}
-      {error && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={11} />{error}</p>}
-    </div>
-  );
-
-  // ── Preview card ──────────────────────────────────────────────────────────
-  const PreviewCard = () => (
+// ── Preview Card — defined OUTSIDE AddProductPage so React never remounts it ───
+function PreviewCard({ images, form }: { images: ProductImage[]; form: any }) {
+  return (
     <div className="bg-white rounded border border-[var(--border-light)] overflow-hidden">
       <div className="aspect-square bg-[var(--cream-dark)] flex items-center justify-center">
         {images.length > 0 ? (
@@ -364,6 +222,139 @@ export default function page() {
       </div>
     </div>
   );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
+export default function AddProductPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(0);
+  const STEPS = ["Basic Info", "Pricing & Stock", "Ayurvedic Details", "Images", "Review"];
+
+  const [form, setForm] = useState({
+    name: "", sku: "", category_id: "", dosha_type: "none",
+    price: "", sale_price: "", stock: "0", low_stock_threshold: "10",
+    weight_grams: "", short_description: "", description: "",
+    usage_instructions: "", meta_title: "", meta_description: "",
+    is_active: true, is_featured: false,
+  });
+  const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: "", quantity: "" }]);
+  const [benefits, setBenefits] = useState<string[]>([""]);
+  const [certifications, setCertifications] = useState<string[]>([]);
+  const [images, setImages] = useState<ProductImage[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get("/products/categories");
+        return res.data;
+      } catch { return []; }
+    },
+  });
+
+  const handleAddImages = (files: File[]) => {
+    const newImages = files.map((file, i) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      isPrimary: images.length === 0 && i === 0,
+    }));
+    setImages(prev => [...prev, ...newImages]);
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImages(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      if (prev[index].isPrimary && next.length > 0) {
+        next[0].isPrimary = true;
+      }
+      return next;
+    });
+  };
+
+  const handleSetPrimary = (index: number) => {
+    setImages(prev => prev.map((img, i) => ({ ...img, isPrimary: i === index })));
+  };
+
+  const validateStep = (s: number): string | null => {
+    if (s === 0) {
+      if (!form.name.trim()) return "Product name is required";
+      if (!form.sku.trim()) return "SKU is required";
+      if (!form.short_description.trim()) return "Short description is required";
+    }
+    if (s === 1) {
+      if (!form.price || parseFloat(form.price) <= 0) return "Valid price is required";
+      if (form.sale_price && parseFloat(form.sale_price) >= parseFloat(form.price))
+        return "Sale price must be less than regular price";
+      if (parseInt(form.stock) < 0) return "Stock cannot be negative";
+    }
+    if (s === 3) {
+      if (images.length === 0) return "Please add at least one product image";
+    }
+    return null;
+  };
+
+  const handleNext = () => {
+    const err = validateStep(step);
+    if (err) { toast.error(err); return; }
+    setStep(s => Math.min(s + 1, STEPS.length - 1));
+    window.scrollTo(0, 0);
+  };
+
+  const createProduct = useMutation({
+    mutationFn: async () => {
+      setUploading(true);
+      const payload: any = {
+        name: form.name,
+        sku: form.sku.toUpperCase(),
+        price: parseFloat(form.price),
+        stock: parseInt(form.stock),
+        low_stock_threshold: parseInt(form.low_stock_threshold),
+        dosha_type: form.dosha_type,
+        is_active: form.is_active,
+        is_featured: form.is_featured,
+        short_description: form.short_description || null,
+        description: form.description || null,
+        usage_instructions: form.usage_instructions || null,
+        meta_title: form.meta_title || null,
+        meta_description: form.meta_description || null,
+      };
+      if (form.sale_price) payload.sale_price = parseFloat(form.sale_price);
+      if (form.weight_grams) payload.weight_grams = parseInt(form.weight_grams);
+      if (form.category_id) payload.category_id = parseInt(form.category_id);
+      const validIngredients = ingredients.filter(i => i.name.trim());
+      if (validIngredients.length > 0) payload.ingredients = validIngredients;
+      const validBenefits = benefits.filter(b => b.trim());
+      if (validBenefits.length > 0) payload.benefits = validBenefits;
+      if (certifications.length > 0) payload.certifications = certifications;
+
+      const productRes = await apiClient.post("/products", payload);
+      const productId = productRes.data.id;
+
+      for (let i = 0; i < images.length; i++) {
+        const formData = new FormData();
+        formData.append("file", images[i].file);
+        await apiClient.post(
+          `/products/${productId}/images?is_primary=${images[i].isPrimary}`,
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+      }
+      return productRes.data;
+    },
+    onSuccess: (data) => {
+      toast.success("Product created successfully!");
+      router.push("/admin/products");
+    },
+    onError: (err: any) => {
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : "Failed to create product");
+    },
+    onSettled: () => setUploading(false),
+  });
 
   return (
     <div className="min-h-screen" style={{ background: "var(--cream)" }}>
@@ -413,10 +404,9 @@ export default function page() {
         <StepBar current={step} steps={STEPS} />
 
         <div className={`grid gap-8 ${previewMode ? "grid-cols-3" : "grid-cols-1"}`}>
-          {/* Form */}
           <div className={previewMode ? "col-span-2" : "col-span-1"}>
 
-            {/* ── STEP 0: Basic Info ──────────────────────────────────────── */}
+            {/* ── STEP 0: Basic Info ─────────────────────────────────────── */}
             {step === 0 && (
               <div className="bg-white rounded border border-[var(--border-light)] p-6 space-y-5">
                 <div className="flex items-center gap-2 pb-4 border-b border-[var(--border-light)]">
@@ -497,7 +487,7 @@ export default function page() {
               </div>
             )}
 
-            {/* ── STEP 1: Pricing & Stock ─────────────────────────────────── */}
+            {/* ── STEP 1: Pricing & Stock ────────────────────────────────── */}
             {step === 1 && (
               <div className="bg-white rounded border border-[var(--border-light)] p-6 space-y-5">
                 <div className="flex items-center gap-2 pb-4 border-b border-[var(--border-light)]">
@@ -528,7 +518,6 @@ export default function page() {
                   </Field>
                 </div>
 
-                {/* Price preview */}
                 {form.price && (
                   <div className="p-4 rounded" style={{ background: "var(--sage-50)", border: "1px solid var(--sage-200)" }}>
                     <p className="text-xs text-[var(--text-muted)] mb-2">Price Preview</p>
@@ -572,7 +561,6 @@ export default function page() {
                   </Field>
                 </div>
 
-                {/* GST preview */}
                 {form.price && (
                   <div className="grid grid-cols-3 gap-3">
                     {[
@@ -588,7 +576,6 @@ export default function page() {
                   </div>
                 )}
 
-                {/* SEO */}
                 <div className="pt-4 border-t border-[var(--border-light)]">
                   <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)] mb-3">SEO (Optional)</p>
                   <div className="space-y-3">
@@ -610,7 +597,7 @@ export default function page() {
               </div>
             )}
 
-            {/* ── STEP 2: Ayurvedic Details ───────────────────────────────── */}
+            {/* ── STEP 2: Ayurvedic Details ──────────────────────────────── */}
             {step === 2 && (
               <div className="space-y-5">
                 <div className="bg-white rounded border border-[var(--border-light)] p-6 space-y-5">
@@ -621,7 +608,6 @@ export default function page() {
                     </h2>
                   </div>
 
-                  {/* Dosha type */}
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-3">
                       Dosha Type
@@ -642,7 +628,6 @@ export default function page() {
                     </div>
                   </div>
 
-                  {/* Ingredients */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
@@ -679,7 +664,6 @@ export default function page() {
                     </div>
                   </div>
 
-                  {/* Benefits */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
@@ -714,7 +698,6 @@ export default function page() {
                     </div>
                   </div>
 
-                  {/* Usage */}
                   <Field label="Usage Instructions">
                     <textarea value={form.usage_instructions}
                       onChange={e => set("usage_instructions", e.target.value)}
@@ -723,7 +706,6 @@ export default function page() {
                       className="input-field resize-none" />
                   </Field>
 
-                  {/* Certifications */}
                   <div>
                     <label className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)] block mb-3">
                       Certifications
@@ -750,7 +732,7 @@ export default function page() {
               </div>
             )}
 
-            {/* ── STEP 3: Images ──────────────────────────────────────────── */}
+            {/* ── STEP 3: Images ─────────────────────────────────────────── */}
             {step === 3 && (
               <div className="bg-white rounded border border-[var(--border-light)] p-6 space-y-5">
                 <div className="flex items-center gap-2 pb-4 border-b border-[var(--border-light)]">
@@ -779,7 +761,7 @@ export default function page() {
               </div>
             )}
 
-            {/* ── STEP 4: Review ──────────────────────────────────────────── */}
+            {/* ── STEP 4: Review ─────────────────────────────────────────── */}
             {step === 4 && (
               <div className="space-y-4">
                 <div className="bg-white rounded border border-[var(--border-light)] p-6">
@@ -788,7 +770,6 @@ export default function page() {
                   </h2>
 
                   <div className="grid grid-cols-2 gap-6">
-                    {/* Left col */}
                     <div className="space-y-4">
                       <div>
                         <p className="text-xs uppercase tracking-wide text-[var(--text-muted)] mb-1">Product</p>
@@ -812,7 +793,6 @@ export default function page() {
                       </div>
                     </div>
 
-                    {/* Right col */}
                     <div className="space-y-4">
                       <div>
                         <p className="text-xs uppercase tracking-wide text-[var(--text-muted)] mb-1">Images</p>
@@ -849,7 +829,6 @@ export default function page() {
                     </div>
                   </div>
 
-                  {/* Certifications */}
                   {certifications.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-[var(--border-light)]">
                       <p className="text-xs uppercase tracking-wide text-[var(--text-muted)] mb-2">Certifications</p>
@@ -877,7 +856,7 @@ export default function page() {
               </div>
             )}
 
-            {/* Navigation buttons */}
+            {/* Navigation */}
             <div className="flex items-center justify-between mt-6">
               <button
                 type="button"
@@ -919,7 +898,7 @@ export default function page() {
           {previewMode && (
             <div>
               <p className="text-xs uppercase tracking-wider text-[var(--text-muted)] mb-3">Live Preview</p>
-              <PreviewCard />
+              <PreviewCard images={images} form={form} />
               <div className="mt-4 p-3 rounded text-xs text-[var(--text-muted)]"
                 style={{ background: "var(--cream-dark)" }}>
                 This is how your product will appear on the store listing page.
